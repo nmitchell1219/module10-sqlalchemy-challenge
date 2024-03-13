@@ -13,7 +13,7 @@ app = Flask(__name__)
 #################################################
 
 # Create engine using the `hawaii.sqlite` database file
-engine = create_engine("sqlite:///hawaii.sqlite")
+engine = create_engine("sqlite:///Resources/hawaii.sqlite")
 
 # Declare a Base using `automap_base()`
 Base = automap_base()
@@ -34,13 +34,17 @@ session = Session(engine)
 @app.route("/")
 def welcome():
     """List all available api routes."""
-    return (
-        f"Available Routes:<br/>"
-        f"/api/v1.0/precipitation<br/>"
-        f"/api/v1.0/stations<br/>"
-        f"/api/v1.0/tobs<br/>"
-        f"/api/v1.0/<start><br/>"
-        f"/api/v1.0/<start>/<end><br/>"
+
+    return '''
+        <h2>Available Routes:</h2>
+        <ol>
+            <li>/api/v1.0/precipitation</li>
+            <li>/api/v1.0/stations</li>
+            <li>/api/v1.0/tobs</li>
+            <li>/api/v1.0/[start]</li>
+            <li>/api/v1.0/[start]/[end]</li>
+        </ol>
+    '''
 
 
 
@@ -58,52 +62,40 @@ def precipitation():
 
     return jsonify(precipitation_dict)
     
-    @app.route("/api/v1.0/stations")
+@app.route("/api/v1.0/stations")
 def stations():
     """Return a list of all station data"""
     # Query all stations
-    results = session.query(Station.station).all()
+    results = session.query(Station.station,Station.name).all()
 
-    # Convert list of tuples into normal list
-    stations_list = list(np.ravel(results))
+    return [ {id:loc} for id,loc in results ]
 
-    return jsonify(stations_list)@app.route("/api/v1.0/tobs")
+@app.route("/api/v1.0/tobs")
 def tobs():
     """Return a list of temperature observations (TOBS) for the previous year"""
     # Query the dates and temperature observations of the most active station for the last year of data.
     # Assuming you have a variable `last_date` which is the last date of data in your dataset and a variable `most_active_station`
-    results = session.query(Measurement.tobs).\
-              filter(Measurement.station == most_active_station).\
-              filter(Measurement.date >= one_year_ago).all()
+    results = session.query(Measurement.date,Measurement.tobs).\
+        filter(Measurement.station == 'USC00519281').\
+        filter(Measurement.date >= '2016-08-23').all()
 
-    # Convert the list of tuples into a normal list
-    tobs_list = list(np.ravel(results))
+    return [ {d:t} for d,t in results ]
 
-    return jsonify(tobs_list)
     
-    @app.route("/api/v1.0/<start>")
-def start_date(start):
+@app.route("/api/v1.0/<start>")
+@app.route("/api/v1.0/<start>/<end>")
+def dateRange(start,end='2017-08-23'):
     """Fetch the minimum temperature, the average temperature, and the max temperature for all dates greater than and equal to the start date"""
     # Query all the stations and for each station, and calculate MIN, AVG, and MAX temperature for all dates greater than and equal to the start date
-    results = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
-              filter(Measurement.date >= start).all()
+
+    results = session.query(
+        func.min(Measurement.tobs), 
+        func.avg(Measurement.tobs), 
+        func.max(Measurement.tobs)).\
+    filter((Measurement.date >= start)&(Measurement.date<=end)).first()
 
     # Convert the result into a list
-    temps = list(np.ravel(results))
+    return {'date_range':f'{start} to {end}','Min':results[0],'Avg':results[1],'Max':results[2]}
 
-    return jsonify(temps=temps)@app.route("/api/v1.0/<start>/<end>")
-def start_end_date(start, end):
-    """Fetch the minimum temperature, the average temperature, and the max temperature for dates between the start and end date inclusive."""
-    # Query all the stations and for each, calculate MIN, AVG, and MAX temperature for dates between the start and end date inclusive
-    results = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
-              filter(Measurement.date >= start).\
-              filter(Measurement.date <= end).all()
-
-    # Convert the result into a list
-    temps = list(np.ravel(results))
-
-    return jsonify(temps=temps)
-
-
-
+if __name__ == "__main__": app.run(debug=True)
 
